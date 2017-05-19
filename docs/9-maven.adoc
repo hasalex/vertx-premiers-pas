@@ -1,0 +1,111 @@
+= Maven et Vert.X
+
+== Dépendances
+
+On peut utiliser Maven pour déclarer les dépendances vers les librairies de Vert.x.
+
+Par exemple :
+
+----
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-core</artifactId>
+            <version>${vertx.version}</version>
+        </dependency>
+----
+
+Quelques autres dépendances classiques :
+
+* io.vertx:vertx-web pour les [[Vertx/Web|applications Web]]
+* io.vertx:vertx-hazelcast pour un cluster
+* ... (à compléter)
+
+Toutes les versions des dépendances sont décrites dans un ''bom''.
+
+----
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.vertx</groupId>
+        <artifactId>vertx-dependencies</artifactId>
+        <version>${vertx.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+----
+
+== Plug-in fabric8
+
+On peut pousser l'utilisation de Maven avec le plug-in fabric8:vertx-maven-plugin.
+On peut utiliser celui-ci dès la création du projet.
+
+Pour créer un projet vide :
+
+----
+$ mvn -DprojectGroupId=fr.sewatech.formation       \
+      -DprojectArtifactId=vertx-mvn                \
+      io.fabric8:vertx-maven-plugin:1.0.7:setup
+----
+
+On peut aussi demander au plugin de créer un Verticle et/ou d'ajouter des dépendances Vert.X.
+
+----
+$ mvn -Ddependencies=web,jmx                       \
+      -Dverticle=fr.sewatech.vertx.MvnVerticle     \
+      io.fabric8:vertx-maven-plugin:1.0.7:setup
+----
+
+Attention, l'ajout des dépendances ne fonctionne que si le le fichier pom.xml ne contient pas déjà le plugin.
+Et il y a un risque d'avoir des dépendances dupliquées.
+
+Le plug-in intervient aussi dans le packaging de l'application en produisant un fat-jar, c'est-à-dire un fichier jar
+contenant l'application et toutes ses dépendances.
+
+----
+$ mvn compile vertx:package
+----
+
+ou simplement, grâce à l'intégration du plugin dans le cycle de vie maven :
+
+----
+$ mvn package
+----
+
+Ce mode de packaging permet de lancer très simplement l'application.
+
+----
+$ java -jar target/vertx-mvn-1.0-SNAPSHOT.jar
+----
+
+Il est aussi possible de lancer l'application avec le plugin.
+
+----
+$ mvn vertx:run
+----
+
+L'intérêt de ce mode de lancement est sa capacité de relancer l'application pour prendre en compte les modifications.
+
+Malheureusement, 'mvn vertx:debug' ne supporte pas le rechargement.
+
+== Vert.X starter
+
+Le projet Vert.X fournit aussi un projet d'exemple (https://github.com/vert-x3/vertx-maven-starter) à partir duquel on peut démarrer.
+
+----
+$ curl http://vertx.io/assets/starter-scripts/create-vertx-project-maven.sh -o vertx-create-maven-project.sh && \
+  bash vertx-create-maven-project.sh
+----
+
+Le projet produit aussi un fat-jar grâce au plug-in Shade.
+
+----
+$ mvn package
+----
+
+Il permet aussi de lancer directement l'application, grâce au plug-in exec.
+
+----
+$ mvn exec:run
+----

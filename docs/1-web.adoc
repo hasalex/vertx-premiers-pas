@@ -1,0 +1,104 @@
+= Premier pas avec Vert.x Web
+
+On sait tous que l'apprentissage d'une techno se fait en 2 étapes :
+
+* Ecrire un "Hello World"
+* Apprendre le reste
+
+Cet article vous propose la première étape pour Vert.x 3.
+Et si tout va bien, je devrais pouvoir vous proposer la deuxième étape demain.
+
+== Maven
+
+La capacité à faire un serveur Web est intégré dans le coeur de Vertx.
+Il existe aussi un module vertx-web qui sert à aller plus loin dans la gestion des routes et le traitement des requêtes.
+
+Donc pour commencer je ne vais avoir qu'une dépendance sur vertx-core.
+
+----
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-core</artifactId>
+            <version>${vertx.version}</version>
+        </dependency>
+----
+
+Au moment où j'écris le billet, j'utilise la version 3.4.1.
+
+----
+    <properties>
+        <vertx.version>3.4.1</vertx.version>
+    </properties>
+----
+
+== Premier Verticle
+
+Pour commencer je dois écrire un verticle.
+
+----
+package fr.sewatech.vertx;
+
+import io.vertx.core.AbstractVerticle;
+
+public class SimpleVerticle extends AbstractVerticle {
+
+    @Override
+    public void start() throws Exception {
+        ...
+    }
+
+}
+----
+
+== Démarrage de Vert.x
+
+La façon de démarrer une application vert.x, est de faire une méthode main.
+
+Dans cette méthode on crée une instance de Vertx et on lui transmet une instance de notre Verticle.
+
+----
+    public static void main(String[] args) {
+        Vertx vertx = Vertx.vertx();
+        vertx.deployVerticle(new SimpleVerticle());
+    }
+----
+
+== Serveur Web
+
+Il me reste à implémenter le fonctionnement du verticle.
+
+Pour ça, je vais démarrer le serveur Web et traiter mes requêtes.
+
+----
+    @Override
+    public void start() throws Exception {
+        vertx.createHttpServer()
+                .requestHandler(request -> request.response().end("Hello World\n"))
+                .listen(8001);
+    }
+----
+
+L'application peut ensuite être démarrée comme tout autre simple application Java...
+
+Et pour tester, une requête sur le port 8001 devrait obtenir une réponse polie.
+
+----
+$ curl http://localhost:8001
+----
+
+== Conclusion
+
+C'est vraiment facile de démarrer avec Vert.x.
+Et même si l'exemple est simpliste, il illustre quand même quelques points intéressants.
+
+Tout d'abord, Vert.x n'a rien à voir avec un serveur d'applications, c'est plus une boite à outils,
+
+Ensuite, dans Vert.x on manipule des handlers qui traitent des événements ; ce sont des callbacks.
+Par exemple, une requête HTTP est considérée comme un événement.
+
+Enfin, on a pu faire du code élégant grâce aux lambdas de Java 8.
+Pour des cas plus complexes, on peut être amenés à faire nos propres classes de handler.
+Et pour des applications plus élaborées, on devra choisir entre ce fonctionnement par callback ou avec une API réactive.
+
+Pour la prochaine étape, je vais commencer à utiliser le router du module vertx-web.
+je vous raconterai.

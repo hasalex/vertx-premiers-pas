@@ -1,0 +1,57 @@
+= JSON
+
+Des classes fournies et utilisées dans les APIs.
+
+Utilise Jackson
+
+== Json
+
+La classe io.vertx.core.json.Json est essentiellement un wrapper pour ObjectMapper de Jackson.
+Elle est là pour nous cacher et simplifier l'utilisation de l'ObjectMapper, avec des méthodes statiques.
+
+Pour passer d'un contenu json à un objet Java :
+
+----
+String jsonString = "{\"name\":\"Alexis\"}";
+Person person = Json.decodeValue(jsonString, Person.class);
+----
+
+Il existe aussi une version joliment formattée.
+
+Et pour le sens inverse :
+
+----
+String jsonPerson = Json.encode(person);
+----
+
+== JsonObject
+
+La classe io.vertx.core.json.JsonObject permet de charger du contenu json dans un objet non typé, qui ressemble à une map.
+
+----
+JsonObject jsonObject = new JsonObject(jsonString);
+String name = jsonObject.getString("name");
+----
+
+On a donc des méthodes getXxx() pour récupérer les valeurs et des méthodes put() pour en modifier ou en ajouter.
+
+Et pour transformer en json, on encode(), avec aussi une variante _prettily_ :
+
+----
+jsonObject.put("Age", 42);
+String result = jsonObject.encode());
+----
+
+== JsonArray
+
+La classe io.vertx.core.json.JsonArray est l'équivalent de JsonObject pour des tableaux.
+
+----
+String jsonArrayString = "[\"Alexis\", \"Alice\"]";
+
+JsonArray jsonArray = new JsonArray(jsonArrayString);
+String first = jsonArray.getString(0));
+
+jsonArray.add("Bob");
+String result = jsonArray.encode());
+----

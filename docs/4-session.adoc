@@ -1,0 +1,73 @@
+= Manipulation de cookies
+
+Vert.X est essentiellement stateless.
+Toutefois, il est assez facile de gérer des sessions.
+Il faut ajouter le bon handler pour ça.
+
+== SessionHandler
+
+Il y a un préalable, c'est d'avoir activé les cookies, avec le CookieHandler.
+Ensuite, on peut ajouter un SessionHandler.
+
+Il existe plusieurs implémentations de SessionHandler :
+
+* Sessions locale, pour les applications mono-instance
+* Sessions en cluster, pour les applications déployées en cluster.
+
+== Sessions locales
+
+On utilise le LocalSessionStore pour ça.
+Les sessions sont stockées en mémoire.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        SessionStore sessionStore = LocalSessionStore.create(vertx);
+        router.route()
+              .handler(SessionHandler.create(sessionStore));
+        router.get("/hello")
+            .handler(this::hello);
+        ...
+    }
+----
+
+== Sessions en cluster
+
+On utilise le ClusteredSessionStore pour ça.
+Les sessions sont stockées en mémoire et distribuées sur le cluster.
+Pour que ça fonctionne, il faut évidemment que Vert.X soit lui-même en cluster.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        SessionStore sessionStore = ClusteredSessionStore.create(vertx);
+        router.route()
+              .handler(SessionHandler.create(sessionStore));
+        router.get("/hello")
+            .handler(this::hello);
+        ...
+    }
+----
+
+== Session
+
+Une fois le handler mis en place, toutes les routes qui suivent peuvent bénéficier des sessions.
+
+----
+    private void hello(RoutingContext routingContext) {
+        Session session = routingContext.session();
+
+        // Second strongest auth method in the world
+        session.put("auth", ok);
+
+        routingContext.response()
+                      .end(session.get("name"));
+    }
+----
+
+== Misc...
+
+(Sessions en stockage externe ?)
+UserSessionHandler

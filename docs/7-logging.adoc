@@ -1,0 +1,29 @@
+= Logging
+
+Vert.X utilise sa propre API de logs qur laquelle on peut brancher un outil de logs classiques.
+Par défault, les logs sont envoyés vers JUL, on peut aussi les envoyer vers Log4J 1 ou 2 ou vers SLF4J.
+Ça fait un wrapper de façade de logger !
+
+Vert.X embarque Netty qui a une logique de logs différentes.
+Il se base sur le classpath avec cet ordre de priorité :
+
+* SLF4J
+* Log4J (1 ?)
+* JUL
+
+On peut aussi lui forcer la main
+
+----
+InternalLoggerFactory.setDefaultFactory(SLF4JLoggerFactory.INSTANCE);
+----
+
+(pk c'est pas fait par vert.x ???)
+
+== JUL
+
+== Application
+
+On peut utiliser l'API de logs de Vert.X dans notre application.
+
+== Web
+

@@ -1,0 +1,22 @@
+= Notes
+
+== Serveur Web
+
+* avec vertx-core
+* Démarrer un serveur Web
+* Répondre à des requêtes GET
+
+== Routes
+
+* Avec vertx-web
+* Routes GET et POST
+* Ne pas oublier le BodyHandler
+
+== Upload
+
+* Avec les routes
+
+== Misc
+
+* Debug et blocking
+* Listen et multi-verticle

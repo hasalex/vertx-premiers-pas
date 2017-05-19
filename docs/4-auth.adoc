@@ -1,0 +1,251 @@
+= Authentification Web
+
+Comme pour beaucoup de sujets, l'authentification est traitée par un handler.
+Plus précisément, il faut un AuthHandler qui a besoin d'un AuthProvider.
+
+Le AuthHandler sert à récupérer les preuves d'identité.
+
+Le AuthProvider sert à valider les preuves d'identité.
+Il vient du module vertx-auth.
+
+== Authentification et autorisation
+
+L'introduction explique le fonctionnement général de l'authentification.
+Lorsqu'une authentification échoue, ça aboutit à une erreur HTTP 401.
+
+Le AuthHandler peut aussi gérer des autorisations.
+Une fois l'utilisateur authentifié, on peut choisir à quelles ressources il a le droit d'accéder.
+
+Par défaut, il n'y a pas de vérification de permission.
+Pour activer ça, il faut préciser au AuthHandler les _authorities_ requises.
+
+Ces _authorities_ peuvent être des rôles : `authHandler.addAuthority("role:admin")`.
+Elles peuvent aussi être des permissions : `authHandler.addAuthority("admin-pages")`.
+
+La façon de stocker les rôles et/ou les permissions dépend du AuthProvider.
+
+== Authentification Digest
+
+Plus simple pour démarrer :
+
+* DigestAuthHandler
+* HtdigestAuth
+
+Il semble que les deux fonctionnent vraiment en couple, impossibles à séparer à cause d'un cast.
+Il serait donc impossible de faire du digest avec un autre stockage.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.route()
+                .handler(DigestAuthHandler.create(HtdigestAuth.create(vertx, ".vertx/.htdigest")));
+        router.get("/auth")
+                .handler(this::auth);
+        ...
+    }
+----
+
+Il faut aussi préparer le fichier .htdigest.
+
+----
+$ htdigest -c .vertx/.htdigest "vertx" "alexis"
+...
+
+$ htdigest .vertx/.htdigest "vertx" "bob"
+...
+----
+
+On peut tester que l'authentification fonctionne
+
+----
+$ curl --digest -u alexis http://localhost:8002/auth
+----
+
+Remarque :
+Si vous ne voulez pas installer htdigest, il est possible de faire le fichier à la main.
+Pour ça, il faut savoir faire du MD5 et appliquer du DIGEST :
+
+----
+username:realm:MD5(username:realm:password)
+----
+
+Ça peut aussi se scripter :
+
+----
+#!/usr/bin/env bash
+username=$1
+password=$2
+if [ -z $password ]
+then
+    echo Password for user $username :
+    #password=$2
+    read -s password
+fi
+echo $username:vertx:$(echo -n "$username:vertx:$password" | md5sum | cut -d ' ' -f 1) >> .htdigest
+----
+
+== Basic + Database
+
+Pour l'authentification Basic, on utilise un BasicAuthHandler.
+Pour le provider, j'ai choisi la base de données avec JDBCAuth.
+
+Dans un premier temps, j'ai créé la base de données pour qu'elle soit utilisable avec la configuration par défaut de JDBCAuth.
+
+----
+CREATE TABLE USER
+    ( USERNAME VARCHAR(255),
+      PASSWORD VARCHAR(255),
+      PASSWORD_SALT VARCHAR(255) );
+----
+
+Le password doit être digéré en SHA-512 et salé avec le contenu de la troisième colonne.
+Pour généré ce contenu, on peut utiliser la méthode `JDBCAuth.computeHash(...)`.
+
+----
+    public void start() throws Exception {
+        ...
+        JsonObject jdbcConfig = new JsonObject().put("url", "jdbc:...");
+        JDBCClient jdbcClient = JDBCClient.createShared(vertx, jdbcConfig);
+        JDBCAuth auth = JDBCAuth.create(vertx, jdbcClient);
+
+        String salt = auth.generateSalt()
+        digestedPassword = auth.computeHash("alexis-pwd", salt);
+        ...
+    }
+----
+
+On peut aussi faire la même chose en scripts, par exemple avec OpenSSL.
+
+----
+salt=$(openssl rand -hex 64 | tr [a-z] [A-Z])
+digested_password=$(echo $salt$password | openssl sha512 -hex | cut -d' ' -f2 | tr [a-z] [A-Z])
+----
+
+Reste ensuite à insérer ça en base de données...
+Une fois notre base prête, on peut configurer le handler
+
+----
+    public void start() throws Exception {
+        ...
+        JsonObject jdbcConfig = new JsonObject().put("url", "jdbc:h2:...");
+        JDBCClient jdbcClient = JDBCClient.createShared(vertx, jdbcConfig);
+        JDBCAuth auth = JDBCAuth.create(vertx, jdbcClient);
+
+        router.route("/basic")
+              .handler(BasicAuthHandler.create(auth));
+        ...
+    }
+----
+
+On peut aussi configurer JDBCAuth pour qu'il s'adapte à d'autres structures de données.
+
+En implémentant un JDBCHashStrategy, on peut modifier l'algorithme de hachage.
+Et en appelant "auth.setAuthenticationQuery(...)", on peut modifier la requête de récupération du mot de passe et
+de la clé de hachage.
+
+Pour les *autorisations*, il faut une table d'association entre les utilisateurs et leurs rôles,
+et, éventuellement une autre table d'association entre les rôles et les permissions.
+Plutôt le détail des tables, cf. http://vertx.io/docs/vertx-auth-jdbc/java/.
+
+Pour que le handler fasse la vérification, il faut lui ajouter une _authority_.
+
+----
+    public void start() throws Exception {
+        ...
+        router.route("/basic")
+              .handler(BasicAuthHandler.create(auth).addAuthority("role:admin");
+        ...
+    }
+----
+
+== Formulaire
+
+----
+router.route("/private/*").handler(RedirectAuthHandler.create(authProvider, "/loginpage.html"));
+----
+
+== JWT
+
+L'authentification JWT fonctionne conjointement avec une autre authentification.
+Avec JWT, on n'est pas capable de valider un couple username/password.
+On peut juste vérifier qu'un token généré par le serveur n'a pas été altéré lorsqu'il revient dans une requête ultérieure.
+
+Le scénario est le suivant :
+
+* Le client envoie une requête sur une URL sécurisée par un autre handler.
+* Le serveur génère un _token_ JWT qu'il met dans sa réponse.
+* Le client utilise le _token_ pour envoyer des requêtes aux URLs sécurisées par JWTAuth.
+
+Pour faire fonctionner ça, on commence par créer un _keystore_ qui sera utilisé par le serveur pour la génération et
+la vérification des _tokens_.
+Il faut au minimum une clé nommée HS256. On peut en ajouter d'autres, comme expliqué dans la documentation officielle
+sur le _JWT auth provider_ (http://vertx.io/docs/vertx-auth-jwt/java/).
+
+----
+keytool -genseckey                                                     \
+        -keystore .config/jwt.jks -storetype jceks -storepass secret   \
+        -keyalg HMacSHA256 -keysize 2048 -alias HS256 -keypass secret
+----
+
+On va utiliser cette clé pour le JWT _provider_.
+
+----
+    public void start() throws Exception {
+        ...
+        JsonObject jwtConfig = new JsonObject().put(
+                "keyStore",
+                new JsonObject()
+                        .put("path", ".config/jwt.jks")
+                        .put("type", "jceks")
+                        .put("password", "secret"));
+        JWTAuth jwtAuth = JWTAuth.create(vertx, jwtConfig);
+        ...
+    }
+----
+
+Ce dernier sera utilisé pour générer les _tokens_.
+
+----
+    public void start() throws Exception {
+        ...
+        router.get("/jwt0")
+                .handler(ctx -> ctx.response()
+                                   .end(jwtAuth.generateToken(ctx.user().principal(), new JWTOptions())));
+        ...
+    }
+----
+
+Puis il sera utilisé pour valider les _tokens_ en l'associant à un `JWTAuthHandler`.
+
+----
+    public void start() throws Exception {
+        ...
+        router.route("/jwt")
+                .handler(JWTAuthHandler.create(jwtAuth, "/jwt0"));
+        router.get("/jwt")
+                .handler(routingContext -> routingContext.response().end("OK"));
+        ...
+    }
+----
+
+On peut tester ça en bash.
+
+----
+token=curl -u bob http://localhost:8002/jwt0
+curl -H "Authorization: Bearer $token" http://localhost:8002/jwt
+----
+
+Pour utiliser les *autorisations*, les permissions accordées à l'utilisateur doivent être dans le token,
+sous forme d'un tableau JSON, dans l'attribut _permissions_.
+
+== Misc
+
+Autres backends
+
+* MongoDB
+* OAuth2
+* Shiro
+
+UserSessionHandler
+

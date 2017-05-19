@@ -1,0 +1,189 @@
+= Router Web Vert.x
+
+Dans le billet sur les premiers pas avec Vert.x, j'avais utiliser son serveur Web de façon brute.
+
+Dans ce billet, je vais gérer les requêtes HTTP de façon plus fine, en fonction de l'URL, de la méthode et d'éventuels paramètres.
+
+Ainsi, je vais traiter des requêtes plus élaborées que des get, comme des formulaires POST ou de l'upload de fichier.
+
+== Serveur Web et routeur
+
+Comme pour le premier exemple, tout se passe dans la méthode start() d'un verticle.
+Mais au lieu de créer simplement le serveur Web, je vais faire traiter ses requêtes par un handlere particulier qui est le router.
+
+----
+    @Override
+    public void start() throws Exception {
+        Router router = Router.router(vertx);
+
+        ...
+
+        vertx.createHttpServer()
+                .requestHandler(router::accept)
+                .listen(8001);
+    }
+----
+
+== Routes simples
+
+Commençons par déclarer des routes simplement par leur URL.
+Les routes sont évaluées dans l'ordre de déclaration, et pour la première dont l'URL correspond, le handler est appelé.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.route("/hello")
+              .handler(routingContext -> routingContext.response().end("Hello World"));
+        router.route("/hi")
+              .handler(routingContext -> routingContext.response().end("Hi everybody"));
+    }
+----
+
+Au niveau du handler, la seule différence c'est qu'on ne travaille plus avec l'objet request, mais avec un RoutingContext.
+
+----
+$ curl http://localhost:8001/hello
+----
+
+Pour les requêtes avec paramètres, j'utilise une méthode plutôt qu'une lambda, pour des raisons de lisibilité.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.get("/hello/:name")
+                .handler(this::hello);
+        ...
+    }
+
+    private void hello(RoutingContext routingContext) {
+        String name = routingContext.request().getParam("name");
+        routingContext.response().end("Hello " + name);
+    }
+----
+
+----
+$ curl http://localhost:8001/hello/Alexis
+----
+
+ou
+
+----
+$ curl http://localhost:8001/hello/who?name=Alexis
+----
+
+(pas de distinction entre path param et query param ?)
+
+== Post
+
+Pour avoir accès au corp des requêtes POST, il faut avoir ajouté un body handler.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.route()
+            .handler(BodyHandler.create());
+        router.post("/update")
+            .handler(this::update);
+        ...
+    }
+
+    private void update(RoutingContext routingContext) {
+        routingContext.getBodyAsJson()
+                .stream()
+                . ...;
+        routingContext.response().end("Done");
+    }
+----
+
+On peut récupérer le body sous la forme d'un objet JSON ou d'un Buffer.
+
+Sans la ligne avec le BodyHandler, le body sera toujours null.
+
+----
+$ curl --data '{"name":"Alexis"}' http://localhost:8001/update
+----
+
+Note :
+Habituellement, une seule route est exécutée, or là, la route "/hello" est exécutée après celle qui contient le
+body handler.
+C'est juste parce que le body handler ne construit pas de response, mais fait appel à la route suivante.
+
+== Formulaire
+
+D'un point de vue HTTP, les données d'un formulaire sont représentées par le type MIME "multipart/form-data".
+Ce type de données est traitée par le BodyHandler, mais au lieu de les mettre dans l'objet routingContext.getBody(),
+elles sont mises à disposition dans la routingContext.request().formAttributes().
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.post("/form")
+            .handler(this::form);
+        ...
+    }
+
+    private void form(RoutingContext routingContext) {
+        MultiMap attributes = routingContext.request().formAttributes();
+        ...
+        routingContext.response().end("Done");
+    }
+----
+
+Les attributs sont dans une multi-map ce qui permet d'avoir plusieurs valeurs pour la même clé.
+
+----
+$ curl --form "name=Alexis" http://localhost:8001/form
+----
+
+== Upload
+
+L'upload est juste un post particulier.
+
+Il est aussi pris en charge par le BodyHandler qui stocke chaque fichier uploadé dans un répertoire
+et qui nous fourni des métdonnées sous la forme d'objets FileUpload.
+
+----
+    private void upload(RoutingContext routingContext) {
+        routingContext.fileUploads()
+                .stream()
+                .map(FileUpload::uploadedFileName)
+                .forEach(System.out::println);
+        routingContext.response().end();
+    }
+----
+
+Chaque objet FileUpload nous donne le chemin du fichier, le nom du fichier coté client, le nom de l'attribut de
+formulaire, la taille du fichier et le type MIME de son contenu.
+
+----
+$ curl -F "image=@cute-kitty.jpg" -v http://localhost:8001/upload
+----
+
+== Routes intermédiaires
+
+En général, lorsqu'on associe un handler à une route, c'est pour produire une réponse.
+Ce n'est pas le cas avec le BodyHandler qui est là pour préparer des données pour d'autres handlers.
+
+On peut aussi implémenter des handlers intermédiaires.
+Pour cela, au lieu de produire une réponse, il faut demander au routeur de passer à la route suivante.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.route()
+              .handler(routingContext -> {
+                          routingContext.put("default-name", "nobody");
+                          routingContext.next();
+                        });
+        ...
+    }
+
+----
+
+Dans cette exemple, j'ajoute une donnée qui sera utilisable par les handlers suivants par routingContext.get("default-name")
+ou dans la map routingContext.data().

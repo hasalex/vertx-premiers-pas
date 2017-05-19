@@ -1,0 +1,38 @@
+= Manipulation de cookies
+
+Vert.X est essentiellement stateless.
+Dans ces conditions, la meilleure façon de maintenir un état de conversation avec un client est le cookie.
+
+== CookieHandler
+
+Comme souvent avec Vert.X, l'activation des cookies passe par un handler.
+C'est similaire au BodyHandler : il faut mettre un CookieHandler dans une route avant les routes intéressées par les cookies.
+
+----
+    @Override
+    public void start() throws Exception {
+        ...
+        router.route()
+            .handler(CookieHandler.create());
+        router.get("/hello")
+            .handler(this::hello);
+        ...
+    }
+----
+
+== Cookie
+
+A partir de là, on peut lire et écrire les cookies dans le routingContext.
+
+----
+    private void hello(RoutingContext routingContext) {
+        Cookie cookie = routingContext.getCookie("name");
+
+        // Strongest auth methode, ever
+        Cookie authCookie = Cookie.cookie("auth", "ok");
+        routingContext.addCookie(authCookie);
+
+        routingContext.response()
+                      .end(cookie.getValue());
+    }
+----

@@ -1,0 +1,46 @@
+= Partage de serveur Web
+
+Vert.X fait un truc amusant quand on essaie de faire écouter plusieurs serveurs HTTP sur le même port.
+
+== Conflit de port
+
+----
+    @Override
+    public void start() throws Exception {
+        int port = 8888;
+        vertx.createHttpServer(new HttpServerOptions().setLogActivity(true))
+                .requestHandler(request -> request.response().end("First\n"))
+                .listen(port);
+        vertx.createHttpServer(new HttpServerOptions().setLogActivity(true))
+                .requestHandler(request -> request.response().end("Second\n"))
+                .listen(port);
+    }
+----
+
+Dans cet exemple, lorsqu'on envoie une série de requêtes vers le port 8888, on aura une alternance de "First" et "Second".
+
+C'est ce que Vert.X appelle le _*Server Sharing*_. Plutôt que de déclencher une erreur au 2° serveur,
+il va partager le port entre les deux serveurs et leur répartir les requêtes en round-robin.
+
+Ce comportement est étrange... Les requêtes paires et impaires ne donnent pas le même résultat !
+Et si on n'a pas configuré les mêmes routes sur les deux serveurs, on aura parfois une réponse correcte et parfois un 404.
+
+== Verticles multi-instances
+
+C'est quand on démarre plusieurs instances du même verticle qu'on voit tout l'intérêt des _shared servers_.
+Ils permmettent une répartition des requêtes entre les instances du verticle.
+
+----
+    public static void main(String[] args) {
+        ...
+        vertx.deployVerticle(new HttpVerticle(),
+                             new DeploymentOptions().setInstances(4));
+    }
+----
+
+Comme chaque verticle est mono-thread, démarrer plusieurs instances permet de mieux exploiter les coeurs du processeur.
+
+== OK ?
+
+Vu comme ça, c'est logique.
+Attention à ne pas l'utiliser de travers.
