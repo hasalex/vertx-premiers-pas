@@ -1,0 +1,94 @@
+= Accès aux bases de données
+
+Vert.X fournit nativement un accès à MongoDB et Redis.
+Pour d'autres bases NoSQL, il faut se tourner vers la communauté.
+
+Pour les bases de données relationnelles, il propose un accès JDBC, bien que ce soit une techno synchrone,
+et a des modules asynchrones pour Postgres et MySQL.
+
+== JDBC
+
+Il est évidemment possible de faire du JDBC standard.
+Comme c'est une API synchrone, il faut mettre ce code dans un _worker verticle_ ou l'appeler dans un `executeBlocking()`.
+
+L'autre solution, c'est d'utiliser le module vertx-jdbc, qui s'occupe de faire les executeBlocking,
+et qui expose une API asynchrone.
+
+----
+    public void start() throws Exception {
+        JsonObject jdbcConfig = new JsonObject().put("url", DB_URL);
+        jdbcClient = JDBCClient.createShared(vertx, jdbcConfig);
+
+        jdbcClient.getConnection(this::update);
+    }
+----
+
+Une fois que la connexion est établie, tout se joue dans le callback...
+
+----
+    private void update(AsyncResult<SQLConnection> result) {
+        if (result.failed()) {
+            logger.error(result.cause());
+        } else {
+            SQLConnection connection = result.result();
+            connection.updateWithParams(
+                    "insert into table (col1, col2, col3) values (?, ?, ?)",
+                    new JsonArray().add(val1).add(val2).add(val3),
+                    asyncResult -> complete(asyncResult, connection));
+        }
+    }
+----
+
+Une fois l'update effectué, c'est dans le callback qu'on vérifie si la mise à jour est effective.
+On est en plein _callback hell_.
+
+L'enfer est encore plus tangible si on veut gérer des transactions.
+Il faut commencer par désactiver les commits automatiques.
+Puis on fait les différentes requêtes.
+Enfin, il faut faire le commit ou le rollback.
+Avec un nouveau niveau de callback à chaque étape.
+
+----
+    public void start() throws Exception {
+        ...
+        jdbcClient.getConnection(
+                asyncResult -> asyncResult.result().setAutoCommit(
+                                    false,
+                                    result -> update(asyncResult)
+                                )
+                );
+    }
+
+    private void update(AsyncResult<SQLConnection> result) {
+        ...
+    }
+
+    private void complete(AsyncResult<UpdateResult> asyncResult, SQLConnection connection) {
+        if (asyncResult.succeeded()) {
+            connection.commit(event -> connection.close());
+        } else {
+            connection.rollback(event -> connection.close());
+        }
+    }
+----
+
+Et pour la façon de faire une transaction avec plusieurs requêtes, je vais laisser le code là ou il est.
+Ça devient encore plus difficile à lire.
+
+Quand on pousse un peu l'API, on touche du doigt la difficulté de modèle asynchrone (même si c'est du faux asynchrone).
+La variante Rx permet de faire du code beaucoup plus propre.
+
+== Select et Stream
+
+
+
+(Je ne vois pas trop l'intérêt du moins pour les update : beaucoup de callback pour du code est intrinsèquement séquentiel.)
+(En select, le stream est pertinent pour des gros contenu ; c'est-à-dire sans pagination)
+(Galère pour committer et fermer la connexion après plusieurs requêtes)
+  (=> passer au Rx)
+
+Avec la datasource interne (shared connection)
+Avec une autre datasource
+Sans datasource (non shared connection), en fait avec sa propre datasource mono-connexion
+
+

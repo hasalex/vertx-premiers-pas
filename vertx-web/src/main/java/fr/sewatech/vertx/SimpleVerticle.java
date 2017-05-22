@@ -11,6 +11,7 @@ public class SimpleVerticle extends AbstractVerticle {
         vertx.createHttpServer()
                 .requestHandler(request -> request.response().end("Hello\n"))
                 .listen(8001, "127.0.0.1");
+        System.out.println(this.getClass() + " : Listening on port 8001");
     }
 
     private void request(HttpServerRequest request) {

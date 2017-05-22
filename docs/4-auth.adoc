@@ -184,7 +184,7 @@ sur le _JWT auth provider_ (http://vertx.io/docs/vertx-auth-jwt/java/).
 
 ----
 keytool -genseckey                                                     \
-        -keystore .config/jwt.jks -storetype jceks -storepass secret   \
+        -keystore .config/jwt.jceks -storetype jceks -storepass secret   \
         -keyalg HMacSHA256 -keysize 2048 -alias HS256 -keypass secret
 ----
 
@@ -196,7 +196,7 @@ On va utiliser cette clé pour le JWT _provider_.
         JsonObject jwtConfig = new JsonObject().put(
                 "keyStore",
                 new JsonObject()
-                        .put("path", ".config/jwt.jks")
+                        .put("path", ".config/jwt.jceks")
                         .put("type", "jceks")
                         .put("password", "secret"));
         JWTAuth jwtAuth = JWTAuth.create(vertx, jwtConfig);
@@ -239,7 +239,11 @@ curl -H "Authorization: Bearer $token" http://localhost:8002/jwt
 Pour utiliser les *autorisations*, les permissions accordées à l'utilisateur doivent être dans le token,
 sous forme d'un tableau JSON, dans l'attribut _permissions_.
 
-== Misc
+NOTE: Le keystore est au format jceks parce que contrairement au format jks, il peut aussi stocker des clés secrètes,
+en plus des clés privées et des certificats publics.
+PKCS#12 a les mêmes capacités.
+
+== TODO
 
 Autres backends
 

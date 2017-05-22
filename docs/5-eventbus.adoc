@@ -1,0 +1,110 @@
+= Event bus
+
+L'_event bus_ sert à échanger des messages entre des parties de l'application, comme des _verticles_ par exemple,
+en local ou en cluster.
+Chaque consommateur de messages a une adresse, indépendante du _verticle_,
+grâce laquelle les producteurs vont communiquer avec lui.
+
+On récupère l'_event bus_ sur l'objet vertx : `vertx.eventbus()`.
+
+== Request-Response
+
+Dans ce mode, on envoie un message et on attend une réponse.
+
+Le consommateur se met en attente sur une adresse.
+Lorsqu'il reçoit un message, il l'utilise et envoie une réponse au producteur.
+
+----
+    public void start() throws Exception {
+        vertx.eventBus().<String>consumer("swt.msg")
+                        .handler(this::answer);
+    }
+
+    private void answer(Message<String> message) {
+        doSomethingWithThe(message.body());
+        message.reply("...");
+    }
+----
+
+Le producteur envoie des messages à cette adresse.
+
+----
+    public void start() throws Exception {
+        ...
+        vertx.eventBus()
+             .send("swt.msg", "Hello, this is my message",
+                   this::hanldeAnswer);
+    }
+----
+
+== Point to point
+
+Le mode point à point ressemble beaucoup au mode requête-réponse, à ceci près qu'il n'y a pas de réponse.
+
+Le code du consommateur est le même que pour l'exemple précédent, en enlevant `message.reply("...")`.
+
+Et le code du producteur est simplifié car on n'a plus de handler pour gérer la réponse.
+
+----
+    public void start() throws Exception {
+        ...
+        vertx.eventBus()
+             .send("swt.msg", "Hello, this is my message");
+    }
+----
+
+Ce mode ressemble un peu aux _queues_ de JMS.
+
+== Publish / subscribe
+
+Dans les deux modes précédents, plusieurs consommateurs sont abonnés à la même adresse, un seul recevra chaque message.
+
+Dans le mode d'abonnement / publication, chaque message peut être reçu par plusieurs abonnés.
+
+Pour s'abonner, ça marche exactement comme dans les modes précédents, avec la méthode `eventBus.consumer(...)`.
+
+Pour la publication, on appelle `eventBus.publish(...)` au lieu de `eventBus.send(...)`.
+
+----
+    public void start() throws Exception {
+        ...
+        vertx.eventBus()
+             .publish("swt.msg", "Hello, this is my message");
+    }
+----
+
+Ce mode ressemble un peu aux _topics_ de JMS.
+
+== Message
+
+Le message a un corp et un en-tête.
+
+L'en-tête est constituée de clés avec des valeurs textuelles.
+
+On peut mettre n'importe quel type d'objet dans le corp.
+Par défaut, seuls quelques types sont supportés (`byte[]`, `JsonObject`, `JsonArray`, `Buffer`).
+Pour les autres types, il faut fournir un MessageCodec.
+Le codec est capable de gérer un type différent entre l'envoi et la réception.
+Pour un message qui passe sur le réseau, le format pivot est le Buffer.
+
+On peut par exemple envisager un codec générique qui transforme un objet en lui-même en local
+et qui le sérialise lorsqu'il faut passer sur le réseau.
+Un tel codec ne peut pas être utilisé de façon générique pour tout Object.
+Il faut l'associer à chaque classe concernée.
+
+----
+        eventBus.registerDefaultCodec(Hello.class, new ObjectCodec());
+----
+
+On peut aussi utiliser un codec spécifiquement pour un message, en le spécifiant dans les `DeliveryOptions`
+au moment de l'envoi.
+
+----
+        eventBus.registerCodec(new ObjectCodec());
+        ...
+        DeliveryOptions options = new DeliveryOptions().setCodecName(ObjectCodec.class.getName());
+        Hello hello = new Hello("Hello", event.request().getParam("name"));
+        router.get("/msg/:name").handler(event -> eventBus.send("swt.hello", hello, options);
+----
+
+Evidemment, si on veut communiquer avec des _verticles_ non java, il vaut mieux utiliser des `JsonObject`.

@@ -47,7 +47,7 @@ public class SecuredWebVerticle extends AbstractVerticle {
         JsonObject jwtConfig = new JsonObject().put(
                 "keyStore",
                 new JsonObject()
-                        .put("path", ".config/jwt.jks")
+                        .put("path", ".config/jwt.jceks")
                         .put("type", "jceks")
                         .put("password", "secret"));
         JWTAuth jwtAuth = JWTAuth.create(vertx, jwtConfig);
@@ -72,7 +72,7 @@ public class SecuredWebVerticle extends AbstractVerticle {
         vertx.createHttpServer()
                 .requestHandler(router::accept)
                 .listen(8002);
-        System.out.println("Listening on port 8002");
+        System.out.println(this.getClass() + " : Listening on port 8002");
     }
 
 }

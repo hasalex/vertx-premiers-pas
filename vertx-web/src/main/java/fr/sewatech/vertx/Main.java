@@ -1,6 +1,5 @@
 package fr.sewatech.vertx;
 
-import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 
@@ -20,12 +19,17 @@ public class Main {
         }
 
         Vertx vertx = Vertx.vertx(options);
-        vertx.deployVerticle(new DatabaseVerticle(), new DeploymentOptions().setWorker(true));
-        vertx.deployVerticle(SimpleVerticle.class.getName(), new DeploymentOptions().setInstances(4));
+//        vertx.deployVerticle(new DBInitVerticle(), new DeploymentOptions().setWorker(true));
+//        vertx.deployVerticle(new DBInitVerticle());
+//        vertx.deployVerticle(SimpleVerticle.class.getName(), new DeploymentOptions().setInstances(4));
 //        vertx.deployVerticle(new WebVerticle());
-        vertx.deployVerticle(new SecuredWebVerticle());
+//        vertx.deployVerticle(new SecuredWebVerticle());
+//        vertx.deployVerticle(new SslWebVerticle());
 //        vertx.deployVerticle(new BlockingVerticle(), new DeploymentOptions().setWorker(false));
 //        vertx.deployVerticle(new ServerSharingVerticle());
+
+        vertx.deployVerticle(new MessageService());
+        vertx.deployVerticle(new WebSSEVerticle());
 
     }
 

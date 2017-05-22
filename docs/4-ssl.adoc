@@ -1,2 +1,44 @@
 = SSL
 
+Bon, le titre est SSL, mais on parle bien de TLS ici.
+
+Pour établir une connexion TLS, il faut une paire de clés dans un keystore (JKS ou PKCS#12)
+et il faut que le serveur Web ouvre un port sur lequel l'option TLS est activée.
+
+== Keystore
+
+Pour générer une clé auto-signée, au format JKS.
+
+----
+keytool -genkeypair -keystore .config/ssl.jks -storepass secret               \
+                    -alias ssl -keypass secret                                \
+                    -keyalg RSA -keysize 2048 -dname "CN=vertx.sewatech.fr"
+----
+
+== HttpServerOptions
+
+On active le TLS par l'intermédiaire d'une option du serveur HTTP.
+La propriété `keyStoreOptions` sert à configurer l'accès à un fichier JKS.
+
+----
+    public void start() throws Exception {
+        ...
+        JksOptions jksOptions = new JksOptions()
+                .setPath(".config/ssl.jks")
+                .setPassword("secret");
+        HttpServerOptions options = new HttpServerOptions()
+                .setSsl(true)
+                .setKeyStoreOptions(jksOptions);
+        vertx.createHttpServer(options)
+                .requestHandler(router::accept)
+                .listen(8003);
+    }
+----
+
+== Test
+
+Pour envoyer une requête HTTPS avec curl, on ajoute le paramètre --insecure car le certification est auto-signé.
+
+----
+curl --insecure https://localhost:8003
+----

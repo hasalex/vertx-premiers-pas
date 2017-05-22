@@ -1,4 +1,4 @@
-= Manipulation de cookies
+= Sessions Web
 
 Vert.X est essentiellement stateless.
 Toutefois, il est assez facile de gérer des sessions.

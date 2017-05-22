@@ -16,5 +16,7 @@ public class ServerSharingVerticle extends AbstractVerticle{
         vertx.createHttpServer(new HttpServerOptions().setLogActivity(true))
                 .requestHandler(request -> request.response().end("Hello 2\n"))
                 .listen(8111, "127.0.0.1");
+
+        System.out.println(this.getClass() + " : Listening on port 80011 (twice)");
     }
 }

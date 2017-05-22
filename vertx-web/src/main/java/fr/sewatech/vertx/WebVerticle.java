@@ -2,6 +2,9 @@ package fr.sewatech.vertx;
 
 import io.vertx.core.AbstractVerticle;
 import io.vertx.core.MultiMap;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.http.HttpMethod;
 import io.vertx.ext.web.*;
 import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.handler.CookieHandler;
@@ -9,6 +12,8 @@ import io.vertx.ext.web.handler.SessionHandler;
 import io.vertx.ext.web.handler.StaticHandler;
 import io.vertx.ext.web.sstore.LocalSessionStore;
 import io.vertx.ext.web.sstore.SessionStore;
+
+import static io.netty.handler.codec.http.HttpResponseStatus.PARTIAL_CONTENT;
 
 public class WebVerticle extends AbstractVerticle {
 
@@ -37,13 +42,26 @@ public class WebVerticle extends AbstractVerticle {
         router.route().handler(SessionHandler.create(sessionStore));
         router.get("/session").handler(this::session);
 
+        EventBus eventBus = vertx.eventBus();
+
+        eventBus.registerCodec(new ObjectCodec());
+
+        //eventBus.registerDefaultCodec(Hello.class, new ObjectCodec());
+        router.get("/msg").handler(event -> eventBus.send("swt.msg", "", event1 -> event.response().end(event1.result().body().toString())));
+        router.get("/pub").handler(event -> eventBus.publish("swt.msg", ""));
+        DeliveryOptions options = new DeliveryOptions().setCodecName(ObjectCodec.class.getName());
+        router.get("/msg/:name").handler(event -> eventBus.send(
+                "swt.hello", new Hello("Hello", event.request().getParam("name")),
+                options,
+                event1 -> event.response().end(event1.result().body().toString())));
+
         // otherwise serve static pages
         router.route().handler(StaticHandler.create());
 
         vertx.createHttpServer()
                 .requestHandler(router::accept)
-                .listen(8002);
-        System.out.println("Listening on port 8002");
+                .listen(8004);
+        System.out.println(this.getClass() + " : Listening on port 8004");
     }
 
     private void hello(RoutingContext routingContext) {

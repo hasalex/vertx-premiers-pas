@@ -1,0 +1,3 @@
+Juste un peu de code pour prendre en main Vert.X.
+
+Et un peu de doc aussi dans le répertoire docs.

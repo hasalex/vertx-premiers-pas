@@ -1,0 +1,88 @@
+= Server-Sent Events
+
+SSE n'est pas supporté nativement par Vert.X, mais on peut ajouter des librairies tierces pour ça.
+
+Par exemple, la page https://github.com/vert-x3/vertx-awesome[Vert.x awesome] fait référence à https://github.com/mariomac/jeasse[jEaSSE].
+Je ne l'ai testé que superficiellement mais la première impression, c'est que la librairie est meilleure que sa doc.
+Et en parcourant son code, il semble qu'elle ne gère que le format SSE des réponses, mais qu'il n'y a
+ni gestion d'erreur ni reprise sur déconnexion.
+Bref pas grand intérêt, du moins pour l'instant (ie début 2017).
+
+== Chunked response
+
+Avant de passer à SSE, on peut jeter un coup d'oeil à la façon de faire des réponses partielles.
+
+Pour ça, on déclare la réponse comme `chunked` et on ne donne pas de taille de réponse.
+L'envoi de contenu partiel se fait avec la méthode `write` qu'on peut appeler plusieurs fois,
+avec un retour à la ligne à chaque fois.
+
+----
+    public void start() throws Exception {
+        ...
+        router.get("/chunk").handler(
+                contextHandler -> {
+                    HttpServerResponse response = contextHandler.request().response();
+                    response.setChunked(true)
+                            .headers()
+                                .add("Content-Type", "text/event-stream")
+                    IntStream.iterate(0, i -> ++i)
+                            .limit(10)
+                            .forEach(i -> response.write("Single chunk number" + i + "\n");
+                }
+        );
+    }
+----
+
+Cette technique s'apparente plus à du _long polling_ qu'à du SSE.
+En effet, il n'y a aucune gestion de la déconnexion.
+
+== SSE response
+
+Pour implémenter le _Server-Sent Events_, il faut commencer par produire des fragments de réponses au bon format.
+
+Il y a quatre attibuts dans un contenu SSE.
+
+* `data`, le seul obligatoire, contient le corp de la réponse,
+* `event` sert à multiplexer la réponse pour envoyer plusieurs types d'événements,
+* `retry` indique au client le délai après lequel il peut se reconnecter, sa valeur par défaut est de trois secondes,
+* `id` est renvoyé par le client dans sa requête de reconnexion.
+
+----
+id: ...
+event: ...
+retry: ...
+data: ...
+data: ...
+data: ...
+----
+
+En Vert.X, on peut formatter le contenu en SSE et l'envoyer dans une requête `chunked`.
+
+----
+    public void start() throws Exception {
+        ...
+        String sseTemplate = "id: %s\nretry: %s\nevent: %s\ndata: %s\n\n";
+
+        router.get("/sse").handler(ctx -> {
+            HttpServerResponse response = ctx.request().response();
+            response.setChunked(true)
+                    .headers()
+                        .add("Content-Type", "text/event-stream")
+            IntStream.iterate(0, i -> ++i)
+                    .limit(10)
+                    .forEach(i -> {
+                        response.write(
+                                String.format(sseTemplate, i, 3_000, "message", "Message " + i)
+                        );
+                    });
+            response.end();
+        });
+    }
+----
+
+L'appel de `response.end()` sert à cloturer la réponse.
+
+Evidemment, ça ne suffit pas pour faire du vrai SSE.
+Il faudrait gérer les déconnexions
+
+Ref: article de synthèse sur https://www.html5rocks.com/en/tutorials/eventsource/basics/[SSE]
